@@ -38,6 +38,12 @@
 
     app.run_server()
 
+`KaKa`为`run_server`接口提供了一个`debug`参数，默认值是`False`，若置为`True`则会启动`debug`模式。
+在`debug`模式中，任何对源代码的修改都将自动重启服务器，且一旦发生了错误将会在浏览器上以页面的形式显示出错误栈信息。
+可以这样开启`debug`模式：
+
+    app.run_server(debug=True)
+
 ### 页面展示
 打开浏览器并访问`http://127.0.0.1:8888/index/`，你将会看到视图函数返回的`hello world`字符串。
 
@@ -234,3 +240,27 @@
 
     # 视图前：MW1处理请求 -> MW2处理请求 -> MW3处理请求 
     # 视图后：MW3处理响应 -> MW2处理响应 -> MW1处理响应
+
+#### 多个中间件的数据共享
+`KaKa`对请求对象和响应对象均设置了一个`storage`属性用以共享数据，它使用起来像这样：
+
+    # 请求中间件中的使用
+    def pre_process(self, request):
+        request.storage['is_handled'] = True
+
+        return None
+
+    # 视图中的使用
+    def show_articles(request):
+        print(request.storage.get('is_handled'))
+        response = TextResponse('hello world')
+        response.storage['name'] = 'kaka'
+
+        return response
+
+    # 响应中间件中的使用
+    def after_process(self, request, response):
+        print(request.get('is_handled'))
+        print(response.get('name'))
+
+        return None
