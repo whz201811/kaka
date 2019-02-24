@@ -48,6 +48,8 @@ class Router(object):
 
     def add(self, url, nexthop, name):
         self._check(url, nexthop, name)
+        if url == '':
+            url = '/'
         self.table.append(
             (url, nexthop, name)
         )
