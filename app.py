@@ -3,20 +3,19 @@
 # 'author':'zlw'
 
 
-from werkzeug.exceptions import HTTPException, NotFound, MethodNotAllowed
-from werkzeug.routing import RequestRedirect
+from werkzeug.exceptions import HTTPException
+# from werkzeug.routing import RequestRedirect
 from werkzeug.serving import run_simple
 
-from .errors import ModuleIsAlreadyInstalledError
-from .request import BaseRequest
+# from .request import BaseRequest
 from .render import Render
 from .restful import RestResponser
 from .routing import Router
-from .response import BaseResponse
+# from .response import BaseResponse
 
 from .middlewares import MiddleWareManager
 from .request import BaseRequest
-from werkzeug.routing import NotFound
+# from werkzeug.routing import NotFound
 
 
 class KaKa():
