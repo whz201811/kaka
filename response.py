@@ -8,8 +8,6 @@
 
 import json
 from werkzeug.wrappers import Response
-
-from jinja2 import Environment, FileSystemLoader
 from .errors import HTMLRenderError, RestResponserHandlerError
 
 
@@ -36,6 +34,13 @@ class RenderResponse(BaseResponse):
         text = self._render_text(template_name, **context)
         super().__init__(text, mimetype=self._mimetype)
 
+    def _check_set(self):
+        if not self._has_render:
+            raise HTMLRenderError("you have not set a render yet.")
+
+    def _render_text(self, template_name, **context):
+        return self._render.render(template_name, **context)
+
     @classmethod
     def set_render(cls, render):
         if render is None:
@@ -43,13 +48,6 @@ class RenderResponse(BaseResponse):
         else:
             cls._render = render
             cls._has_render = True
-
-    def _render_text(self, template_name, **context):
-        return self._render.render(template_name, **context)
-
-    def _check_set(self):
-        if not self._has_render:
-            raise HTMLRenderError("you have not set a render yet.")
 
 
 class RestResponse(BaseResponse):
@@ -81,9 +79,9 @@ class RestResponse(BaseResponse):
 
     def _check_override(self, extra_dict):
         # 额外信息字典中不允许有code/status属性
-        for not_need in self._cannot_override:
+        for key in self._cannot_override:
             try:
-                extra_dict.pop(not_need)
+                extra_dict.pop(key)
             except KeyError:
                 pass
 
@@ -104,6 +102,10 @@ class SUCCESS(RestResponse):
         self._add_data(data, extra_dict)
         super().__init__(self._code, self._status, extra_dict=extra_dict)
 
+    def _check_set(self):
+        if not self._has_code:
+            raise RestResponserHandlerError("you have not set a SUCCESS code yet.")
+
     def _add_data(self, data, extra_dict):
         extra_dict['data'] = data
 
@@ -116,13 +118,9 @@ class SUCCESS(RestResponse):
     @classmethod
     def set_code(cls, code):
         if not isinstance(code, int):
-            raise TypeError(f"the type of code must be int, current is: '{type(status)}'.")
+            raise TypeError(f"the type of code must be int, current is: '{type(code)}'.")
         cls._code = code
         cls._has_code = True
-
-    def _check_set(self):
-        if not self._has_code:
-            raise RestResponserHandlerError("you have not set a SUCCESS code yet.")
 
 
 class FAIL(RestResponse):
@@ -146,6 +144,10 @@ class FAIL(RestResponse):
         self._add_why(code, extra_dict)
         super().__init__(code, self._status, extra_dict=extra_dict)
 
+    def _check_set(self):
+        if not self._has_code_map:
+            raise RestResponserHandlerError("you have not set a FAIL code_map yet.")
+
     def _add_why(self, code, extra_dict):
         """
         根据给定的错误码更新额外信息字典，增加why属性
@@ -166,7 +168,7 @@ class FAIL(RestResponse):
     def set_code_map(cls, code_map):
         def check():
             if not isinstance(code_map, dict):
-                raise TypeError(f"the type of code_map must be dict, current is: '{type(status)}'.")
+                raise TypeError(f"the type of code_map must be dict, current is: '{type(code_map)}'.")
 
             # 检查code_map中的值
             for code, why in code_map.items():
@@ -179,7 +181,3 @@ class FAIL(RestResponse):
         check()
         cls._code_map = code_map
         cls._has_code_map = True
-
-    def _check_set(self):
-        if not self._has_code_map:
-            raise RestResponserHandlerError("you have not set a FAIL code_map yet.")

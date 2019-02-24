@@ -7,97 +7,61 @@ from werkzeug.exceptions import HTTPException, NotFound, MethodNotAllowed
 from werkzeug.routing import RequestRedirect
 from werkzeug.serving import run_simple
 
-from .combinations import _inner_module_map
 from .errors import ModuleIsAlreadyInstalledError
 from .request import BaseRequest
+from .render import Render
+from .restful import RestResponser
+from .routing import Router
 from .response import BaseResponse
+
+from .middlewares import MiddleWareManager
+from .request import BaseRequest
+from werkzeug.routing import NotFound
 
 
 class KaKa():
-    """
-    app应用负责接收底层服务器传入的每一次的http请求并生成正确的响应然后返回给底层服务器。
-    app通过引入各种模块以扩展自身的能力，最基本的模块是：路由系统、中间件系统。
-
-    1. 所有的请求和响应对象均以BaseRequest和BaseReponse为基类。
-    2. 请求和响应对象在中间件中不得伪造，但可修改。
-    """
-
     def __init__(self):
-        self._install_modules(_inner_module_map)  # 安装内部模块
+        self.middleware_manager = MiddleWareManager()
+        self.router = Router()
+        self.render = Render()
+        self.rest_responser = RestResponser()
 
     def __call__(self, environ, start_response):
-        return self._wsgi_api(environ, start_response)
-
-    def _wsgi_api(self, environ, start_response):  # http api接口
         response = self._deal_with(environ)
         return response(environ, start_response)
 
-    def _deal_with(self, environ):  # 核心处理接口
-        request = BaseRequest(environ)
-        response = None
+    def _deal_with(self, environ):
+        """web框架核心驱动"""
 
-        def hook_pre_process():
-            """不允许伪造request，只允许修改request或者返回response
-            所以必须返回None或者response对象
-            """
-            interrupt_response = self.mw_manager.pre_process(request)
-            return interrupt_response
+        request = self._build_request(environ)
 
-        def route():
-            view, kwargs = self.router.route(environ)
-            return view, kwargs
-
-        def process(view, kwargs):
-            response = view(request, **kwargs)
-            return response
-
-        def check_type(response):
-             """检查响应对象的类型，必须是BaseResponse及其子类"""
-             is_valid_type = isinstance(response, BaseResponse)
-             if not is_valid_type:
-                raise TypeError(f'the type of response object must be BaseResponse or its subclass. current type: "{type(response)}".')
-
-        def hook_after_process():
-            """不允许伪造response，只允许修改response,所以必须返回None"""
-            self.mw_manager.after_process(request, response)
-
-        def start():
-            interrupt_response = hook_pre_process()
-            if interrupt_response is not None:  # 特殊处理中断对象(拦截请求并直接要求返回的对象)
-                check_type(interrupt_response)
-                return interrupt_response
-            else:  # 否则什么也不做,继续处理
-                pass
-
-            view, kwargs = route()  # NotFoundError, RequestRedictError
-
-            nonlocal response
-            response = process(view, kwargs)  # MethodNotAllowdError(with restful)
-            check_type(response)
-
-            hook_after_process()
+        interrupt = self._hook_before_process(request)
+        if interrupt is not None:
+            return interrupt
 
         try:
-            start()
-        except (NotFound, RequestRedirect, MethodNotAllowed)  as exc:  # 这些错误对象可以作为response对象返回
+            view, kwargs = self._route(request)
+            response = view(request, **kwargs)
+        except HTTPException as exc:
             return exc
 
+        self._hook_after_process(request, response)
         return response
 
-    def _install_modules(self, module_map):
-        """安装内部模块的接口，暂不对用户开放"""
+    def _build_request(self, environ):
+        request = BaseRequest(environ)
+        return request
 
-        def not_installed(name):
-            return getattr(self, name, None) is None
+    def _hook_before_process(self, request):
+        interrupt = self.middleware_manager.iter_before(request)
+        return interrupt
 
-        def install(name, module):
-            setattr(self, name, module)
+    def _route(self, request):
+        view, kwargs = self.router.route(request)
+        return view, kwargs
 
-        for name, module in module_map.items():
-            if not_installed(name) is True:
-                install(name, module)
-            else:
-                raise ModuleIsAlreadyInstalledError(f"the module '{name}' is already installed.")
+    def _hook_after_process(self, request, response):
+        self.middleware_manager.iter_after(request, response)
 
     def run_server(self, host='localhost', port=8888, debug=False):
         """服务器启动接口，默认本地环回口，端口号8888"""

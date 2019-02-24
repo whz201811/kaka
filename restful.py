@@ -7,7 +7,6 @@
 
 
 from werkzeug.exceptions import MethodNotAllowed
-
 from .response import SUCCESS, FAIL
 
 
